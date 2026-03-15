@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SA Gaming Demo with Logic Master</title>
+    <style>
+        /* จัดการโครงสร้างหน้าจอ */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background-color: #000;
+        }
+
+        /* ส่วนบน: ฝังหน้าเว็บเล่นจริง */
+        .web-section {
+            height: 60vh; /* ให้พื้นที่เว็บ 60% ของความสูงจอ */
+            width: 100%;
+            border-bottom: 4px solid #ff9900;
+            background-color: #1a1a1a;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* ส่วนล่าง: สูตร (เลื่อนขึ้นลงได้ในตัว) */
+        .logic-section {
+            height: 40vh; /* ให้พื้นที่สูตร 40% */
+            overflow-y: auto;
+            background: #000;
+            padding: 10px 5px;
+            box-sizing: border-box;
+        }
+
+        /* --- ปรับแต่ง UI สูตรให้กะทัดรัด (Compact Mode) --- */
+        :root {
+            --bg-color: #000; --text-color: #fff; --box-bg: #0d0d0d;
+            --border-color: #222; --dot-empty: #1a1a1a;
+        }
+        .logic-container { display: flex; flex-direction: column; align-items: center; }
+        
+        .header-row { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .target-circle { 
+            width: 65px; height: 65px; border: 3px solid #333; border-radius: 50%; 
+            font-size: 24px; font-weight: 900; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; position: relative; background: var(--box-bg);
+        }
+        .dna-tag { position: absolute; bottom: -12px; font-size: 8px; color: #888; white-space: nowrap; }
+        .active-P { background: #0044ff !important; color: #fff !important; }
+        .active-B { background: #cc0000 !important; color: #fff !important; }
+
+        .plate-box { background: var(--box-bg); border-radius: 8px; padding: 4px; width: 100%; max-width: 400px; margin-bottom: 5px; border: 1px solid var(--border-color); }
+        .grid { display: grid; grid-template-rows: repeat(6, 1fr); grid-template-columns: repeat(12, 1fr); grid-auto-flow: column; gap: 2px; }
+        .dot { width: 100%; aspect-ratio: 1; border-radius: 50%; background: var(--dot-empty); font-size: 8px; display: flex; align-items: center; justify-content: center; }
+        .dot.P { background: #0044ff; color:#fff; } .dot.B { background: #cc0000; color:#fff; } .dot.T { background: #2ecc71; color:#fff; }
+
+        .main-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; width: 100%; max-width: 400px; margin-bottom: 5px; }
+        .btn-logic { padding: 12px 0; border: none; border-radius: 8px; font-size: 20px; font-weight: 900; color: #fff; box-shadow: 0 3px 0 rgba(0,0,0,0.4); cursor: pointer; }
+        .btn-p { background: #0044ff; } .btn-t { background: #2ecc71; } .btn-b { background: #cc0000; }
+        
+        .util-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; width: 100%; max-width: 400px; }
+        .btn-sub { padding: 8px 0; border: 1px solid #333; border-radius: 5px; font-size: 11px; background: #111; color: #fff; cursor: pointer; }
+
+        /* Overlay & Modals */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 9999; }
+        .modal-content { background: #111; width: 80%; padding: 20px; border-radius: 10px; border: 1px solid #333; color: #fff; text-align: center; }
+        #historyOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; display: none; flex-direction: column; padding: 20px; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <div class="web-section">
+        <iframe src="https://www.ssgame350k.bet/sagaming-demo/" title="SA Gaming Demo"></iframe>
+    </div>
+
+    <div class="logic-section">
+        <div class="logic-container">
+            <div class="header-row">
+                <button class="btn-sub" id="superBtn" onclick="toggleSuperMode()">⚡ SUPER OFF</button>
+                <div id="target" class="target-circle">
+                    <span id="targetText">-</span>
+                    <div id="targetDna" class="dna-tag"></div>
+                </div>
+                <button class="btn-sub" onclick="openModal('mainSettingModal')">⚙️ ตั้งค่า</button>
+            </div>
+
+            <div class="plate-box">
+                <div id="grid" class="grid"></div>
+            </div>
+
+            <div class="main-buttons">
+                <button class="btn-logic btn-p" onclick="processAdd('P')">P</button>
+                <button class="btn-logic btn-t" onclick="processAdd('T')">T</button>
+                <button class="btn-logic btn-b" onclick="processAdd('B')">B</button>
+            </div>
+
+            <div class="util-row">
+                <button class="btn-sub" onclick="undo()">ย้อนกลับ</button>
+                <button class="btn-sub" onclick="openHistory()">📜 ประวัติ (<span id="winCountSmall">0</span>)</button>
+                <button class="btn-sub" style="color:#ff4444;" onclick="reset()">ล้าง</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mainSettingModal" class="modal" onclick="closeModals()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 style="color:#ffd700;">ตั้งค่าสูตร</h3>
+            <div style="display:grid; gap:10px;">
+                <button class="btn-sub" onclick="openModal('logicModal')">DNA: <span id="curDNA">2^7</span></button>
+                <button class="btn-sub" onclick="openModal('woodModal')">ไม้ทบ: <span id="curWood">6</span></button>
+                <button class="btn-sub" onclick="openModal('lvModal')">LV แม่นยำ: <span id="curLv">1</span></button>
+            </div>
+            <button class="btn-sub" style="margin-top:20px; width:100%; background:#ffd700; color:#000;" onclick="closeModals()">ตกลง</button>
+        </div>
+    </div>
+
+    <div id="logicModal" class="modal" onclick="closeModals()"><div class="modal-content" onclick="event.stopPropagation()"><h3>DNA</h3><div id="dnaOptions" style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; max-height:200px; overflow-y:auto;"></div></div></div>
+    <div id="lvModal" class="modal" onclick="closeModals()"><div class="modal-content" onclick="event.stopPropagation()"><h3>LV</h3><div id="lvOptions" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px;"></div></div></div>
+    <div id="woodModal" class="modal" onclick="closeModals()"><div class="modal-content" onclick="event.stopPropagation()"><h3>ไม้ทบ</h3><div id="woodOptions" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:5px;"></div></div></div>
+    
+    <div id="historyOverlay">
+        <div style="display:flex; justify-content:space-between; align-items:center;"><h2>ประวัติ</h2><button onclick="closeHistory()" style="background:none; border:none; color:#fff; font-size:24px;">✕</button></div>
+        <div id="historyList" style="flex-grow:1; overflow-y:auto;"></div>
+        <button class="btn-sub" style="width:100%; margin-top:10px;" onclick="closeHistory()">ปิด</button>
+    </div>
+
+    <script>
+        // --- LOGIC เดิมทั้งหมด ---
+        let log = [], winHistory = [];
+        let currentStep = 0, isFound = false, aim = "", isLoss = false;
+        let selectedLv = 1, selectedWood = 6, currentExp = 7;
+        let isSuperMode = false, lockedDNA = null;
+        const dnaList = [5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+
+        // UI Init
+        const dnaOptions = document.getElementById('dnaOptions');
+        dnaList.forEach(e => { let b = document.createElement('button'); b.className='btn-sub'; b.innerText=`2^${e}`; b.onclick=()=>setLogic(e); dnaOptions.appendChild(b); });
+        [1,2,3,4,5,6].forEach(v => { let b = document.createElement('button'); b.className='btn-sub'; b.innerText=v; b.onclick=()=>setLv(v); document.getElementById('lvOptions').appendChild(b); });
+        [1,2,3,4,6,8,10,12].forEach(v => { let b = document.createElement('button'); b.className='btn-sub'; b.innerText=v; b.onclick=()=>setWood(v); document.getElementById('woodOptions').appendChild(b); });
+
+        function toggleSuperMode() { isSuperMode = !isSuperMode; let btn = document.getElementById('superBtn'); btn.innerText = isSuperMode ? "⚡ SUPER ON" : "⚡ SUPER OFF"; btn.style.background = isSuperMode ? "#00f2ff" : "#111"; btn.style.color = isSuperMode ? "#000" : "#fff"; lockedDNA = null; render(); }
+        function openModal(id) { closeModals(); document.getElementById(id).style.display = 'flex'; }
+        function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
+        function openHistory() { document.getElementById('historyOverlay').style.display = 'flex'; }
+        function closeHistory() { document.getElementById('historyOverlay').style.display = 'none'; }
+        function setLogic(e) { currentExp = e; document.getElementById('curDNA').innerText = `2^${e}`; closeModals(); render(); }
+        function setLv(v) { selectedLv = v; document.getElementById('curLv').innerText = v; closeModals(); render(); }
+        function setWood(v) { selectedWood = v; document.getElementById('curWood').innerText = v; closeModals(); render(); }
+
+        function processAdd(v) {
+            if (isFound && v !== 'T') {
+                const hData = { status: '', step: currentStep + 1, dna: lockedDNA || currentExp, lv: selectedLv, logLen: log.length };
+                if (v === aim) { 
+                    hData.status = 'WIN'; winHistory.unshift(hData);
+                    currentStep = 0; isFound = false; lockedDNA = null;
+                } else { 
+                    currentStep++; 
+                    if (currentStep >= selectedWood) { 
+                        hData.status = 'LOSS'; hData.step = selectedWood; winHistory.unshift(hData);
+                        isLoss = true; currentStep = 0; isFound = false; lockedDNA = null;
+                    } 
+                }
+            } else if (isLoss) { isLoss = false; }
+            log.push(v);
+            render();
+        }
+
+        function undo() {
+            if (log.length === 0) return;
+            const lastLogLen = log.length - 1;
+            log.pop();
+            if (winHistory.length > 0 && winHistory[0].logLen === lastLogLen) { winHistory.shift(); }
+            currentStep = 0; isFound = false; lockedDNA = null; isLoss = false;
+            render();
+        }
+
+        function reset() { if(confirm("ล้างข้อมูล?")) { log=[]; winHistory=[]; currentStep=0; isFound=false; lockedDNA=null; render(); } }
+
+        function scanLogic(exp, cleanData) {
+            if (cleanData.length < 3) return null;
+            const count = Math.pow(2, exp);
+            const limit = Math.min(count, 1048576); 
+            for (let d = 0; d < limit; d++) {
+                let streak = 0;
+                for (let r = 0; r < cleanData.length; r++) {
+                    if (r === 0) continue;
+                    let bit = (d >> (r % exp)) & 1;
+                    let prev = cleanData[r-1];
+                    let predict = (bit === 0) ? prev : (prev === 'P' ? 'B' : 'P');
+                    if (predict !== cleanData[r]) streak++; else streak = 0;
+                }
+                if (streak - (exp - 1) >= selectedLv) {
+                    let nextBit = (d >> (cleanData.length % exp)) & 1;
+                    let lastActual = cleanData[cleanData.length - 1];
+                    return (nextBit === 0) ? lastActual : (lastActual === 'P' ? 'B' : 'P');
+                }
+            }
+            return null;
+        }
+
+        function render() {
+            const clean = log.filter(x => x !== 'T');
+            const target = document.getElementById('target');
+            const targetText = document.getElementById('targetText');
+            const targetDna = document.getElementById('targetDna');
+            target.className = "target-circle"; targetDna.innerText = "";
+            
+            if (isLoss) {
+                targetText.innerText = "L"; target.style.color = "#ff4444";
+            } else {
+                if (clean.length >= 3) {
+                    if (isSuperMode && !lockedDNA) {
+                        for (let e of dnaList) {
+                            let res = scanLogic(e, clean);
+                            if (res) { lockedDNA = e; aim = res; isFound = true; break; }
+                        }
+                    } else {
+                        aim = scanLogic(lockedDNA || currentExp, clean);
+                        isFound = !!aim;
+                    }
+                }
+                if (isFound) {
+                    targetText.innerText = (currentStep + 1) + aim;
+                    target.classList.add(`active-${aim}`);
+                    targetDna.innerText = "2^" + (lockedDNA || currentExp);
+                } else { targetText.innerText = "-"; target.style.color = "#444"; }
+            }
+            const grid = document.getElementById('grid'); grid.innerHTML = "";
+            log.forEach(v => { let d = document.createElement('div'); d.className = 'dot ' + v; d.innerText = v; grid.appendChild(d); });
+            for(let i=log.length; i<72; i++) grid.appendChild(document.createElement('div')).className='dot';
+            
+            document.getElementById('winCountSmall').innerText = winHistory.length;
+            document.getElementById('historyList').innerHTML = winHistory.map((item, idx) => `
+                <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #222;">
+                    <div>
+                        <div style="font-size:9px; color:#888;">DNA 2^${item.dna} LV.${item.lv}</div>
+                        <div style="font-weight:900; color:${item.status==='WIN'?'#2ecc71':'#ff4444'}">${item.status==='WIN'?'WIN':'LOSS'}</div>
+                    </div>
+                    <div style="font-weight:900;">ไม้ ${item.step}</div>
+                </div>
+            `).join('');
+        }
+        render();
+    </script>
+</body>
+</html>
